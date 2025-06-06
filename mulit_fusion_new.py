@@ -10,12 +10,12 @@ from tqdm import tqdm
 # 配置参数
 class Config:
     # 输入路径
-    background_dir = "/home/xcx/桌面/test/image"  # 背景图像目录
-    object_root_dir = "/home/xcx/桌面/output_tench"  # 物体图像根目录
+    background_dir = "/media/HDD0/XCX/backgrounds"  # 背景图像目录
+    object_root_dir = "/media/HDD0/XCX/sam"  # 物体图像根目录
 
     # 输出路径
-    output_root = "/home/xcx/桌面/synthetic_dataset"  # 输出根目录
-    blended_dir = os.path.join(output_root, "blended_images")  # 融合后的图像
+    output_root = "/media/HDD0/XCX/synthetic_dataset"  # 输出根目录
+    blended_dir = os.path.join(output_root, "images")  # 融合后的图像
     annotations_dir = os.path.join(output_root, "annotations")  # 标注文件
     visualization_dir = os.path.join(output_root, "visualization")  # 可视化结果
 
