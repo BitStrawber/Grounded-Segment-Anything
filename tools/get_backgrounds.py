@@ -1,63 +1,95 @@
 import os
-import cv2
+import subprocess
+from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
+import pynvml
 
 
-def extract_frames(video_path, output_dir, target_fps=23, video_index=0):
-    """从视频中抽帧，直接保存到目标文件夹"""
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"Error: 无法打开视频 {video_path}")
-        return 0
+def get_available_gpus(min_memory_free=2048):
+    """获取可用GPU列表（显存大于指定值）"""
+    pynvml.nvmlInit()
+    available = []
+    for i in range(pynvml.nvmlDeviceGetCount()):
+        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        if mem.free / 1024 ** 2 >= min_memory_free:
+            available.append(i)
+    return available
 
-    original_fps = cap.get(cv2.CAP_PROP_FPS)
-    if original_fps <= 0:
-        original_fps = 1  # 防止除以零
 
-    frame_interval = max(1, int(round(original_fps / target_fps)))
+def extract_frames_ffmpeg(video_path, output_dir, target_fps, gpu_id):
+    """GPU加速抽帧（隔离到指定GPU）"""
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    cmd = [
+        'ffmpeg',
+        '-hwaccel', 'cuda',
+        '-hwaccel_device', str(gpu_id),
+        '-i', video_path,
+        '-vf', f'fps={target_fps}',
+        '-q:v', '2',
+        '-f', 'image2',
+        '-loglevel', 'error',
+        f'{output_dir}/{os.path.splitext(os.path.basename(video_path))[0]}_%05d.jpg'
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        # 返回处理成功的视频路径和帧数（通过输出文件统计）
+        generated = len([f for f in os.listdir(output_dir)
+                         if f.startswith(os.path.splitext(os.path.basename(video_path))[0])])
+        return (video_path, generated, gpu_id)
+    except subprocess.CalledProcessError as e:
+        return (video_path, 0, gpu_id)
+
+
+def batch_processor(video_list, output_dir, target_fps=23):
+    """带GPU负载均衡的批量处理器"""
+    available_gpus = get_available_gpus()
+    if not available_gpus:
+        raise RuntimeError("没有可用的GPU资源！")
+
     os.makedirs(output_dir, exist_ok=True)
+    total_videos = len(video_list)
 
-    saved_count = 0
-    frame_count = 0
-    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    # 任务分配（轮询GPU）
+    tasks = []
+    for i, video_path in enumerate(video_list):
+        gpu_id = available_gpus[i % len(available_gpus)]
+        tasks.append((video_path, output_dir, target_fps, gpu_id))
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # 多进程处理
+    with ProcessPoolExecutor(max_workers=len(available_gpus)) as executor:
+        futures = []
+        for task in tasks:
+            futures.append(executor.submit(extract_frames_ffmpeg, *task))
 
-        if frame_count % frame_interval == 0:
-            # 文件名格式：视频名_帧序号.jpg（例如：video1_00042.jpg）
-            cv2.imwrite(
-                os.path.join(output_dir, f"{video_name}_{saved_count:05d}.jpg"),
-                frame
-            )
-            saved_count += 1
-        frame_count += 1
+        # 全局进度条
+        with tqdm(total=total_videos, desc="视频处理进度", unit="视频",
+                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [GPU:{postfix[0]}|剩余:{postfix[1]}]") as pbar:
+            completed = 0
+            gpu_usage = {gpu: 0 for gpu in available_gpus}
 
-    cap.release()
-    return saved_count
+            for future in futures:
+                video_path, frame_count, gpu_id = future.result()
+                completed += 1
+                gpu_usage[gpu_id] += frame_count
 
+                # 更新进度条
+                pbar.set_postfix([
+                    f"{','.join(map(str, available_gpus))}",
+                    f"{total_videos - completed}"
+                ])
+                pbar.update(1)
 
-def process_videos(input_root, output_root, target_fps=23):
-    """处理所有视频，直接输出到目标文件夹"""
-    # 扫描所有视频文件
-    video_files = []
-    for root, _, files in os.walk(input_root):
-        for file in files:
-            if file.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')):
-                video_files.append(os.path.join(root, file))
+                # 打印单任务结果
+                pbar.write(
+                    f"GPU{gpu_id}: {os.path.basename(video_path)} → {frame_count}帧 "
+                    f"(总进度: {completed}/{total_videos})"
+                )
 
-    if not video_files:
-        print("未找到任何视频文件！")
-        return
-
-    # 全局进度条
-    with tqdm(video_files, desc="整体进度", unit="视频") as pbar:
-        for i, video_path in enumerate(pbar):
-            pbar.set_postfix_str(os.path.basename(video_path))
-            extracted = extract_frames(video_path, output_root, target_fps, i)
-            pbar.write(f"{os.path.basename(video_path)}: 提取 {extracted} 帧")
+    # 最终统计
+    total_frames = len(os.listdir(output_dir))
+    print(f"\n✅ 全部完成！共处理 {total_videos} 个视频，生成 {total_frames} 张图片")
+    print(f"GPU负载统计: {gpu_usage}")
 
 
 if __name__ == "__main__":
@@ -66,8 +98,15 @@ if __name__ == "__main__":
     output_folder = "/media/HDD0/XCX/backgrounds"
     target_fps = 1  # 每秒1帧
 
-    # 开始处理
-    print(f"▶ 开始从 {input_folder} 提取视频帧（目标帧率: {target_fps}FPS）")
-    print(f"▶ 输出模式: 所有图片直接保存到 {output_folder}")
-    process_videos(input_folder, output_folder, target_fps)
-    print("✅ 所有视频处理完成！")
+    # 扫描视频文件
+    video_files = [
+        os.path.join(root, f)
+        for root, _, files in os.walk(input_folder)
+        for f in files
+        if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))
+    ]
+
+    # 启动处理
+    print(f"▶ 开始处理 {len(video_files)} 个视频 → 目标帧率: {target_fps}FPS")
+    print(f"▶ 可用GPU: {get_available_gpus()}")
+    batch_processor(video_files, output_folder, target_fps)
