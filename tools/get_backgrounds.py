@@ -106,10 +106,10 @@ def batch_processor(video_list, output_dir, target_fps=23, max_workers=8):
 
 if __name__ == "__main__":
     # 配置参数
-    input_folder = "/media/HDD0/XCX/UVEB/"
+    input_folder = "/media/HDD0/XCX/UVEB/test"
     output_folder = "/media/HDD0/XCX/background"
-    target_fps = 1
-    max_threads = 60  # 根据CPU核心数调整（建议：物理核心数×1.5）
+    target_fps = 23
+    max_threads = 40  # 根据CPU核心数调整（建议：物理核心数×1.5）
 
     # 扫描视频文件
     video_files = [
