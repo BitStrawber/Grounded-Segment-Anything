@@ -96,7 +96,7 @@ if __name__ == "__main__":
     # 配置参数
     input_folder = "/media/HDD0/XCX/UVEB/test/blur/cv_151.mp4"
     output_folder = "/media/HDD0/XCX/background"
-    target_fps = 1  # 每秒1帧
+    target_fps = 23  # 每秒1帧
 
     # 扫描视频文件
     video_files = [
