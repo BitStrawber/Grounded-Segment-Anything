@@ -47,7 +47,7 @@ def extract_frames_optimized(video_path, output_dir, target_fps, progress=None):
 
         # 校验帧数是否达标（误差超过20%则调用FFmpeg补足）
         expected_frames = int(total_frames / interval)
-        if frame_count < expected_frames * 0.8:
+        if frame_count < expected_frames * 0.9:
             ffmpeg_fallback(video_path, output_dir, target_fps, basename)
             frame_count = len(os.listdir(output_dir))  # 更新实际帧数
 
@@ -132,8 +132,8 @@ def batch_processor(video_list, output_dir, target_fps=23, max_workers=8):
 if __name__ == "__main__":
     # 配置参数
     input_folder = "/media/HDD0/XCX/UVEB"
-    output_folder = "/media/HDD0/XCX/background"
-    target_fps = 16
+    output_folder = "/media/HDD0/XCX/background0"
+    target_fps = 15
     max_threads = 80  # 根据实际CPU核心数调整
 
     # 扫描视频文件
