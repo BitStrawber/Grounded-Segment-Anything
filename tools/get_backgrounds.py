@@ -62,34 +62,36 @@ def batch_processor(video_list, output_dir, target_fps=23):
         for task in tasks:
             futures.append(executor.submit(extract_frames_ffmpeg, *task))
 
-        # 全局进度条
-        with tqdm(total=total_videos, desc="视频处理进度", unit="视频",
-                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [GPU:{postfix[0]}|剩余:{postfix[1]}]") as pbar:
-            completed = 0
-            gpu_usage = {gpu: 0 for gpu in available_gpus}
+        # 初始化统计信息
+        gpu_stats = {gpu: {"completed": 0, "frames": 0} for gpu in available_gpus}
 
+        # 简化进度条格式
+        with tqdm(total=total_videos, desc="视频处理进度", unit="视频") as pbar:
             for future in futures:
                 video_path, frame_count, gpu_id = future.result()
-                completed += 1
-                gpu_usage[gpu_id] += frame_count
+                gpu_stats[gpu_id]["completed"] += 1
+                gpu_stats[gpu_id]["frames"] += frame_count
 
                 # 更新进度条
-                pbar.set_postfix([
-                    f"{','.join(map(str, available_gpus))}",
-                    f"{total_videos - completed}"
-                ])
                 pbar.update(1)
+
+                # 更新进度条描述
+                gpu_info = " ".join([f"GPU{gpu}:{stat['completed']}"
+                                     for gpu, stat in gpu_stats.items()])
+                pbar.set_postfix_str(f"GPUs: {gpu_info} | Frames: {frame_count}")
 
                 # 打印单任务结果
                 pbar.write(
                     f"GPU{gpu_id}: {os.path.basename(video_path)} → {frame_count}帧 "
-                    f"(总进度: {completed}/{total_videos})"
+                    f"(总进度: {pbar.n}/{total_videos})"
                 )
 
     # 最终统计
-    total_frames = len(os.listdir(output_dir))
+    total_frames = sum(stat["frames"] for stat in gpu_stats.values())
     print(f"\n✅ 全部完成！共处理 {total_videos} 个视频，生成 {total_frames} 张图片")
-    print(f"GPU负载统计: {gpu_usage}")
+    print("GPU负载统计:")
+    for gpu, stat in gpu_stats.items():
+        print(f"  GPU{gpu}: {stat['completed']}视频/{stat['frames']}帧")
 
 
 if __name__ == "__main__":
