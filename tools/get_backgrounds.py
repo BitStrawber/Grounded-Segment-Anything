@@ -106,8 +106,8 @@ def batch_processor(video_list, output_dir, target_fps=23, gpu_ids=None):
 
 if __name__ == "__main__":
     # 配置参数
-    input_folder = "/media/HDD0/XCX/UVEB/test/blur"
-    output_folder = "/media/HDD0/XCX/background"
+    input_folder = "/media/HDD0/XCX/UVEB/test/blur/cv_1000.mp4"
+    output_folder = "/media/HDD0/XCX/background0"
     target_fps = 23
     specified_gpus = [4, 5]  # 指定要使用的GPU ID列表，设置为None则使用CPU
 
