@@ -1,7 +1,5 @@
 import os
 import cv2
-import av
-import avcuda
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
@@ -9,10 +7,17 @@ from multiprocessing import Manager
 from functools import partial
 
 
-def extract_frames(video_path, output_dir, target_fps, gpu_id=None, progress=None):
+def init_cuda():
+    """初始化CUDA环境"""
+    cv2.cuda.setDevice(0)  # 默认设备，实际使用时会被覆盖
+    if not cv2.cuda.getCudaEnabledDeviceCount():
+        raise RuntimeError("No CUDA-capable devices detected")
+
+
+def extract_frames_cuda(video_path, output_dir, target_fps, gpu_id=None, progress=None):
     """
-    视频抽帧函数（支持PyAV-CUDA/OpenCV硬件加速）
-    :param gpu_id: 为None时使用CPU处理，否则使用指定GPU
+    OpenCV CUDA硬件加速抽帧
+    :param gpu_id: 指定GPU设备ID（None时回退到CPU）
     :param progress: 多进程共享进度字典
     """
     try:
@@ -21,36 +26,63 @@ def extract_frames(video_path, output_dir, target_fps, gpu_id=None, progress=Non
         frame_count = 0
 
         if gpu_id is not None:
-            # 方案1：PyAV-CUDA硬件解码（需安装avcuda）
-            container = av.open(video_path)
-            stream = container.streams.video[0]
-            avcuda.init_hwcontext(stream.codec_context, gpu_id)
+            # 设置当前进程使用的GPU设备
+            cv2.cuda.setDevice(gpu_id)
 
-            # 计算跳帧间隔
-            fps = stream.average_rate
-            interval = max(1, int(fps / target_fps))
+            # 方案1：使用cudacodec模块硬解码（需要NVIDIA Video Codec SDK）
+            try:
+                # 初始化CUDA视频读取器
+                decoder = cv2.cudacodec.createVideoReader(video_path)
+                gpu_frame = cv2.cuda_GpuMat()
 
-            for i, frame in enumerate(container.decode(stream)):
-                if i % interval == 0:
-                    img = frame.to_image()
-                    img.save(f"{output_dir}/{basename}_{frame_count:05d}.jpg")
+                # 获取视频属性
+                fps = decoder.get(cv2.cudacodec.VideoReaderProperties_PROP_FPS)
+                interval = max(1, int(fps / target_fps))
+
+                while True:
+                    # 硬件解码到GPU内存
+                    ret, gpu_frame = decoder.nextFrame(gpu_frame)
+                    if not ret:
+                        break
+
+                    # 跳帧逻辑
+                    if frame_count % interval == 0:
+                        # 下载到CPU内存并保存
+                        cpu_frame = gpu_frame.download()
+                        cv2.imwrite(f"{output_dir}/{basename}_{frame_count:05d}.jpg", cpu_frame)
+
                     frame_count += 1
+
+            except cv2.error as e:
+                print(f"CUDA解码失败 {video_path} (GPU {gpu_id}): {str(e)}")
+                # 回退到常规CUDA加速方案
+                return extract_frames_cuda(video_path, output_dir, target_fps, gpu_id=None, progress=progress)
+
         else:
-            # 方案2：OpenCV硬件解码（兼容性更好）
-            cap = cv2.VideoCapture(video_path)
+            # 方案2：常规OpenCV + CUDA处理（兼容性更好）
+            cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(video_path)  # 回退到默认解码器
+
             fps = cap.get(cv2.CAP_PROP_FPS)
             interval = max(1, int(fps / target_fps))
+            gpu_frame = cv2.cuda_GpuMat()
 
             while cap.isOpened():
-                # 跳帧优化：只解码目标帧
+                # 跳帧优化
                 for _ in range(interval - 1):
                     cap.grab()
 
-                ret, frame = cap.retrieve()
+                ret, cpu_frame = cap.retrieve()
                 if not ret:
                     break
 
-                cv2.imwrite(f"{output_dir}/{basename}_{frame_count:05d}.jpg", frame)
+                # 上传到GPU处理（可选加速）
+                gpu_frame.upload(cpu_frame)
+                # 此处可添加CUDA处理（如色彩空间转换、缩放等）
+                processed_frame = gpu_frame.download()
+
+                cv2.imwrite(f"{output_dir}/{basename}_{frame_count:05d}.jpg", processed_frame)
                 frame_count += 1
             cap.release()
 
@@ -63,7 +95,7 @@ def extract_frames(video_path, output_dir, target_fps, gpu_id=None, progress=Non
         print(f"处理失败 {video_path} (GPU {gpu_id}): {str(e)}")
         if gpu_id is not None:
             print("尝试回退到CPU处理...")
-            return extract_frames(video_path, output_dir, target_fps, gpu_id=None, progress=progress)
+            return extract_frames_cuda(video_path, output_dir, target_fps, gpu_id=None, progress=progress)
         return (video_path, 0, 'Failed')
 
 
@@ -85,7 +117,7 @@ def batch_processor(video_list, output_dir, target_fps=23, gpu_ids=None):
         worker_count = len(gpu_ids) if use_gpu else min(8, os.cpu_count())
 
         # 任务包装函数
-        task_func = partial(extract_frames,
+        task_func = partial(extract_frames_cuda,
                             output_dir=output_dir,
                             target_fps=target_fps,
                             progress=progress)
@@ -140,7 +172,15 @@ if __name__ == "__main__":
     input_folder = "/media/HDD0/XCX/UVEB/test/blur"
     output_folder = "/media/HDD0/XCX/background"
     target_fps = 23
-    specified_gpus = [4, 5]  # 指定GPU ID列表，None则使用CPU
+    specified_gpus = [4, 5]  # 指定可用的GPU ID列表
+
+    # 初始化CUDA环境检查
+    try:
+        init_cuda()
+        print(f"检测到 {cv2.cuda.getCudaEnabledDeviceCount()} 个CUDA设备")
+    except Exception as e:
+        print(str(e))
+        specified_gpus = None  # 强制回退到CPU模式
 
     # 扫描视频文件
     video_files = [
