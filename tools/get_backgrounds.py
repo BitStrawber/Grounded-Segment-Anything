@@ -133,7 +133,7 @@ if __name__ == "__main__":
     # 配置参数
     input_folder = "/media/HDD0/XCX/UVEB"
     output_folder = "/media/HDD0/XCX/background"
-    target_fps = 21
+    target_fps = 18
     max_threads = 80  # 根据实际CPU核心数调整
 
     # 扫描视频文件
