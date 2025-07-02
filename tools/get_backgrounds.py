@@ -1,14 +1,16 @@
 import os
 import cv2
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor  # 改为线程池
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from functools import partial
 import threading
+import subprocess
 
-def extract_frames_cpu(video_path, output_dir, target_fps, progress=None):
+
+def extract_frames_optimized(video_path, output_dir, target_fps, progress=None):
     """
-    CPU多线程抽帧（兼容性更强）
+    CPU优化版抽帧（关键帧感知+时间戳跳转）
     :param progress: 多线程共享进度字典（线程安全）
     """
     try:
@@ -22,29 +24,36 @@ def extract_frames_cpu(video_path, output_dir, target_fps, progress=None):
             cap = cv2.VideoCapture(video_path)  # 回退到默认解码器
 
         fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         interval = max(1, int(fps / target_fps))
 
-        while cap.isOpened():
-            # 跳帧优化（减少解码压力）
-            for _ in range(interval - 1):
-                cap.grab()
+        # 时间戳跳转法（减少无效解码）
+        for frame_id in range(0, total_frames, interval):
+            target_time = frame_id * (1000 / fps)  # 毫秒单位
+            cap.set(cv2.CAP_PROP_POS_MSEC, target_time)
 
-            ret, frame = cap.retrieve()
+            ret, frame = cap.read()
             if not ret:
                 break
 
-            # 直接保存帧（无GPU中转）
             cv2.imwrite(
                 f"{output_dir}/{basename}_{frame_count:05d}.jpg",
-                frame
+                frame,
+                [cv2.IMWRITE_JPEG_QUALITY, 85]  # 压缩质量优化
             )
             frame_count += 1
 
         cap.release()
 
+        # 校验帧数是否达标（误差超过20%则调用FFmpeg补足）
+        expected_frames = int(total_frames / interval)
+        if frame_count < expected_frames * 0.8:
+            ffmpeg_fallback(video_path, output_dir, target_fps, basename)
+            frame_count = len(os.listdir(output_dir))  # 更新实际帧数
+
         # 更新进度（线程安全）
         if progress is not None:
-            with threading.Lock():  # 加锁避免竞争
+            with threading.Lock():
                 progress[video_path] = 1
         return (video_path, frame_count, 'CPU')
 
@@ -52,34 +61,49 @@ def extract_frames_cpu(video_path, output_dir, target_fps, progress=None):
         print(f"处理失败 {video_path}: {str(e)}")
         return (video_path, 0, 'Failed')
 
+
+def ffmpeg_fallback(video_path, output_dir, target_fps, basename):
+    """FFmpeg兜底方案（解决关键帧限制问题）"""
+    cmd = f"ffmpeg -i {video_path} -vf fps={target_fps} {output_dir}/{basename}_%05d.jpg -hide_banner -loglevel error"
+    subprocess.run(cmd, shell=True)
+
+
 def batch_processor(video_list, output_dir, target_fps=23, max_workers=8):
     """
-    批量处理器（多线程动态调度）
-    :param max_workers: 线程数（建议≤CPU核心数×2）
+    批量处理器（动态负载均衡）
+    :param max_workers: 线程数（建议≤CPU逻辑核心数×1.5）
     """
     # 多线程共享进度（线程安全字典）
     progress = {}
     lock = threading.Lock()
 
-    # 按视频大小排序优化负载（大文件优先）
-    sorted_videos = sorted(video_list, key=lambda x: os.path.getsize(x), reverse=True)
+    # 按视频时长预估排序（大文件优先）
+    sorted_videos = sorted(
+        video_list,
+        key=lambda x: cv2.VideoCapture(x).get(cv2.CAP_PROP_FRAME_COUNT),
+        reverse=True
+    )
     total_videos = len(sorted_videos)
 
     # 任务包装函数
     task_func = partial(
-        extract_frames_cpu,
+        extract_frames_optimized,
         output_dir=output_dir,
         target_fps=target_fps,
         progress=progress
     )
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    # 动态调整线程数（避免超额订阅）
+    cpu_count = os.cpu_count()
+    adjusted_workers = min(max_workers, int(cpu_count * 1.5)) if cpu_count else max_workers
+
+    with ThreadPoolExecutor(max_workers=adjusted_workers) as executor:
         futures = [
             executor.submit(task_func, video_path=video)
             for video in sorted_videos
         ]
 
-        # 进度条监控
+        # 进度条监控（实时更新）
         with tqdm(total=total_videos, desc="视频处理进度") as pbar:
             stats = {'CPU': 0, 'Failed': 0}
             last_progress = 0
@@ -104,12 +128,13 @@ def batch_processor(video_list, output_dir, target_fps=23, max_workers=8):
     if stats['Failed'] > 0:
         print(f"  ❗ 失败: {stats['Failed']}视频")
 
+
 if __name__ == "__main__":
     # 配置参数
     input_folder = "/media/HDD0/XCX/UVEB/test"
     output_folder = "/media/HDD0/XCX/background"
-    target_fps = 4
-    max_threads = 40  # 根据CPU核心数调整（建议：物理核心数×1.5）
+    target_fps = 1
+    max_threads = 60  # 根据实际CPU核心数调整
 
     # 扫描视频文件
     video_files = [
