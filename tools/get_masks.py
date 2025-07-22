@@ -301,11 +301,11 @@ if __name__ == "__main__":
     parser.add_argument("--input_root", type=str, default=INPUT_ROOT, help="包含分类图像文件夹的根目录。")
     parser.add_argument("--output_root", type=str, default=OUTPUT_ROOT, help="保存掩码和结果的根目录。")
     parser.add_argument("--grounding_config", type=str,
-                        default="GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
+                        default="../GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
                         help="GroundingDINO模型配置文件路径。")
-    parser.add_argument("--grounding_checkpoint", type=str, default="groundingdino_swint_ogc.pth",
+    parser.add_argument("--grounding_checkpoint", type=str, default="../groundingdino_swint_ogc.pth",
                         help="GroundingDINO模型权重路径。")
-    parser.add_argument("--sam_checkpoint", type=str, default="sam_vit_h_4b8939.pth", help="SAM模型权重路径。")
+    parser.add_argument("--sam_checkpoint", type=str, default="../sam_vit_h_4b8939.pth", help="SAM模型权重路径。")
     parser.add_argument("--bert_base_uncased_path", type=str, default="bert-base-uncased",
                         help="BERT模型路径（如果需要本地加载）。")
 
