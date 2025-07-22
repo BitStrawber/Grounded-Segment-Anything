@@ -1,115 +1,160 @@
 import os
-import shutil
+import tarfile
 import scipy.io
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 
 
 def load_imagenet_meta(devkit_path):
-    """加载ImageNet元数据，返回WNID到(ILSVRC_ID, 类别名)的映射字典"""
+    """
+    【已修改】加载ImageNet元数据，返回 WNID 到 “核心英文名” 的映射。
+    它会从标签列表（如 "tench, Tinca tinca"）中提取第一个名字（"tench"），
+    并将其中的空格替换为下划线，使其成为一个安全、规范的文件夹名。
+    """
     meta_path = os.path.join(devkit_path, 'data', 'meta.mat')
+    if not os.path.exists(meta_path):
+        raise FileNotFoundError(f"错误：在路径 '{devkit_path}' 下找不到 meta.mat 文件。")
+
     synsets = scipy.io.loadmat(meta_path)['synsets']
-    return {
-        s[0][1][0]: (int(s[0][0][0][0]), s[0][2][0].replace(', ', '_'))
-        for s in synsets if int(s[0][0][0][0]) <= 1000  # 仅保留1-1000的类别
-    }
+
+    wnid_to_name = {}
+    for s in synsets:
+        wnid = s[0][1][0]
+        # 完整标签，例如:"great white shark, white shark, man-eater..."
+        full_label = s[0][2][0]
+        # 1. 用逗号分割，只取第一部分
+        primary_name = full_label.split(',')[0].strip()
+        # 2. 将这部分的空格替换为下划线，作为最终名称
+        safe_name = primary_name.replace(' ', '_')
+        wnid_to_name[wnid] = safe_name
+
+    return wnid_to_name
 
 
-def process_single_class(wnid, src_root, target_root, wnid_to_info):
-    """处理单个WNID类别的文件（仅处理目标WNID）"""
-    # 检查是否为需要处理的WNID
-    if wnid not in wnid_to_info:
-        return wnid, 0
+def extract_single_class(wnid, class_name, src_dir, target_dir):
+    """
+    处理单个WNID：找到对应的.tar文件并将其解压到指定的目标子文件夹。
+    """
+    src_archive_path = os.path.join(src_dir, f"{wnid}.tar")
 
-    src_folder = os.path.join(src_root, wnid)
-    if not os.path.isdir(src_folder):
-        return wnid, 0
+    # 检查源文件是否存在
+    if not os.path.exists(src_archive_path):
+        return wnid, 0, f"源文件未找到: {src_archive_path}"
 
-    # 获取类别信息
-    ilsvrc_id, class_name = wnid_to_info[wnid]
+    # 定义并创建目标文件夹
+    class_target_dir = os.path.join(target_dir, class_name)
+    os.makedirs(class_target_dir, exist_ok=True)
 
-    # 创建目标文件夹（格式：ILSVRCID_类别名）
-    target_folder = os.path.join(target_root, f"{class_name}")
-    os.makedirs(target_folder, exist_ok=True)
-
-    # 复制所有图片
-    copied = 0
-    for img in os.listdir(src_folder):
-        shutil.copy2(
-            os.path.join(src_folder, img),
-            os.path.join(target_folder, img)
-        )
-        copied += 1
-
-    return wnid, copied
+    try:
+        # 直接解压到目标文件夹
+        with tarfile.open(src_archive_path, 'r') as tar:
+            # 获取成员数量用于返回
+            members = tar.getmembers()
+            tar.extractall(path=class_target_dir)
+            return wnid, len(members), "成功"
+    except Exception as e:
+        return wnid, 0, f"解压失败: {e}"
 
 
-def organize_imagenet_by_id(
+def extract_imagenet_subclasses(
         src_dir,
         target_dir,
         devkit_path,
-        target_wnids=None,  # 新增：指定目标WNID列表
+        target_wnids,
         num_workers=8
 ):
     """
-    主函数：按类别ID重组ImageNet训练集（支持指定目标WNID）
-    :param target_wnids: 需要处理的WNID列表（如["n01440764", "n02119789"]）
+    主函数：按给定的WNID列表，查找、创建并解压ImageNet子类别。
     """
-    # 加载元数据
-    wnid_to_info = load_imagenet_meta(devkit_path)
+    print("1. 正在加载ImageNet元数据...")
+    try:
+        wnid_to_name = load_imagenet_meta(devkit_path)
+    except FileNotFoundError as e:
+        print(e)
+        return
 
-    # 如果指定了target_wnids，则过滤元数据
-    if target_wnids is not None:
-        wnid_to_info = {k: v for k, v in wnid_to_info.items() if k in target_wnids}
-        print(f"✅ 已过滤，待处理类别数: {len(wnid_to_info)}")
+    # 过滤出我们需要处理的类别信息
+    tasks = []
+    for wnid in target_wnids:
+        if wnid in wnid_to_name:
+            tasks.append((wnid, wnid_to_name[wnid]))
+        else:
+            print(f"⚠️ 警告：在meta.mat中未找到WNID '{wnid}'，将跳过。")
 
-    # 获取所有WNID文件夹（如果指定了target_wnids，则只处理这些）
-    wnids = target_wnids if target_wnids is not None else [
-        d for d in os.listdir(src_dir) if os.path.isdir(os.path.join(src_dir, d))
-    ]
+    print(f"2. 准备处理 {len(tasks)} 个目标子类别...")
 
     # 多进程处理
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = []
-        for wnid in wnids:
-            futures.append(executor.submit(
-                process_single_class,
-                wnid, src_dir, target_dir, wnid_to_info
-            ))
+        # 提交所有任务
+        futures = [
+            executor.submit(extract_single_class, wnid, class_name, src_dir, target_dir)
+            for wnid, class_name in tasks
+        ]
 
-        # 进度监控
-        total = len(wnids)
-        pbar = tqdm(total=total, desc="处理进度", unit="类别")
+        # 使用tqdm监控进度
+        pbar = tqdm(total=len(tasks), desc="解压进度", unit="类别")
 
-        results = {}
+        success_count = 0
         for future in futures:
-            wnid, count = future.result()
-            results[wnid] = count
-            pbar.set_postfix_str(f"最新: {wnid} ({count}张)")
+            wnid, num_files, status = future.result()
+            if status == "成功":
+                success_count += 1
+            else:
+                pbar.write(f"❌ 错误 ({wnid}): {status}")
+            pbar.set_postfix_str(f"最新: {wnid} ({status})")
             pbar.update(1)
 
         pbar.close()
 
-    # 统计报告
-    total_copied = sum(results.values())
-    print(f"\n✅ 完成！共处理 {len(results)} 个类别，复制 {total_copied} 张图片")
-    print(f"目标路径: {target_dir}")
+    print(f"\n✅ 全部完成！")
+    print(f"成功处理并解压了 {success_count} / {len(tasks)} 个子类别。")
+    print(f"数据已存放在目标路径: {target_dir}")
 
 
 if __name__ == "__main__":
-    # 配置路径
-    TRAIN_SRC_DIR = "/path/to/ILSVRC2012_img_train"  # 原始训练集路径
-    TARGET_DIR = "/path/to/organized_imagenet"  # 目标路径
-    DEVKIT_PATH = "/path/to/ILSVRC2012_devkit_t12"  # devkit解压路径
+    # 1. ===== 配置您的路径 =====
+    # 包含所有 nXXXX.tar 文件的原始ImageNet数据集路径
+    TRAIN_SRC_DIR = "/media/HDD0/XCX/IMAGENET"
+    # 您希望存放提取出的子类别文件夹的目标路径
+    TARGET_DIR = "/media/HDD0/XCX/IMAGENET/selected_subclasses"
+    # devkit解压后的路径
+    DEVKIT_PATH = "/media/HDD0/XCX/IMAGENET/ILSVRC2012_devkit_t12"
 
-    # 指定需要处理的WNID列表（示例）
-    TARGET_WNIDS = ["n01440764", "n02119789", "n03000684"]  # 修改为你需要的WNID
+    # 2. ===== 定义需要提取的所有子类别WNID =====
+    # 这是根据我们之前讨论的所有海洋生物子类别整理的完整列表
+    TARGET_WNIDS = [
+        # fish (16个子类)
+        'n01440764', 'n01443537', 'n01484850', 'n01491361', 'n01494475', 'n01496331',
+        'n01498041', 'n02514041', 'n02526121', 'n02536864', 'n02606052', 'n02607072',
+        'n02640242', 'n02641379', 'n02643566', 'n02655020',
+        # turtle (5个子类)
+        'n01667114', 'n01667778', 'n01669191', 'n01675722', 'n01677366',
+        # corals & related (3个子类: 脑珊瑚, 珊瑚礁, 海葵)
+        'n01910747', 'n09256479', 'n01924916',
+        # holothurian (海参, 1个子类)
+        'n01917289',
+        # echinus (海胆, 1个子类)
+        'n01914609',
+        # scallop (扇贝, 1个子类)
+        'n01950731',
+        # starfish (海星, 1个子类)
+        'n02317335',
+        # cuttlefish (乌贼, 1个子类)
+        'n01968897',
+        # jellyfish (水母, 1个子类)
+        'n01909978',
+        # diver (潜水员, 1个子类)
+        'n04149813'
+    ]
 
-    # 执行重组（仅处理指定WNID）
-    organize_imagenet_by_id(
+    # 3. ===== 执行脚本 =====
+    # 使用与CPU核心数匹配的进程数以获得最佳性能
+    cpu_cores = os.cpu_count() or 8
+
+    extract_imagenet_subclasses(
         src_dir=TRAIN_SRC_DIR,
         target_dir=TARGET_DIR,
         devkit_path=DEVKIT_PATH,
-        target_wnids=TARGET_WNIDS,  # 传入目标WNID列表
-        num_workers=os.cpu_count()
+        target_wnids=TARGET_WNIDS,
+        num_workers=cpu_cores
     )
