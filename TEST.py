@@ -25,8 +25,8 @@ class CategorizedSegmenter:
     def __init__(self):
         """初始化分割器，直接在代码中配置参数"""
         # ============= 配置区域 =============
-        self.input_root = "/media/HDD0/XCX/imagenet/imagenet_images"  # 输入根目录（包含分类子文件夹）
-        self.output_root = "/media/HDD0/XCX/sam"  # 输出根目录
+        self.input_root = "/media/HDD0/XCX/classes/images"  # 输入根目录（包含分类子文件夹）
+        self.output_root = "/media/HDD0/XCX/classes/masks"  # 输出根目录
 
         # 模型文件路径配置
         self.grounding_config = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
