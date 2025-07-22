@@ -29,8 +29,8 @@ class CategorizedSegmenter:
         # ============= 配置区域 =============
         self.rank = rank
         self.world_size = world_size
-        self.input_root = "/media/HDD0/XCX/imagenet/imagenet_images"
-        self.output_root = "/media/HDD0/XCX/sam"
+        self.input_root = "/media/HDD0/XCX/classes/images"
+        self.output_root = "/media/HDD0/XCX/classes/masks"
 
         # 模型配置
         self.grounding_config = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
@@ -228,7 +228,7 @@ def worker(rank, world_size, categories):
 
 if __name__ == "__main__":
     # 获取所有类别
-    input_root = "/media/HDD0/XCX/imagenet/imagenet_images"
+    input_root = "/media/HDD0/XCX/classes/images"
     categories = [d for d in os.listdir(input_root)
                   if os.path.isdir(os.path.join(input_root, d))]
 
