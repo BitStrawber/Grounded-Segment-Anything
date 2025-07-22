@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # 包含所有 nXXXX.tar 文件的原始ImageNet数据集路径
     TRAIN_SRC_DIR = "/media/HDD0/XCX/IMAGENET"
     # 您希望存放提取出的子类别文件夹的目标路径
-    TARGET_DIR = "/media/HDD0/XCX/IMAGENET/selected_subclasses"
+    TARGET_DIR = "/media/HDD0/XCX/classes/images"
     # devkit解压后的路径
     DEVKIT_PATH = "/media/HDD0/XCX/IMAGENET/ILSVRC2012_devkit_t12"
 
