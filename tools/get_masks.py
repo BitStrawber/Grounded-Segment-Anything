@@ -292,26 +292,35 @@ def worker(rank, world_size, args, all_categories):
 
 
 if __name__ == "__main__":
+    # --- 1. 获取脚本的绝对路径和其所在目录 ---
+    # __file__ 是当前脚本的文件名
+    # os.path.realpath() 获取文件的真实路径，可以解析符号链接等
+    # os.path.dirname() 获取路径中的目录部分
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, os.pardir)) # os.pardir 等价于 ".."
+
+    # --- 2. 基于项目根目录构建默认路径 ---
+    # 这样做的好处是，无论你在哪里运行脚本，路径总是正确的
+    default_grounding_config = os.path.join(project_root, "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+    default_grounding_checkpoint = os.path.join(project_root, "groundingdino_swint_ogc.pth")
+    default_sam_checkpoint = os.path.join(project_root, "sam_vit_h_4b8939.pth")
+    # 对于输入输出，我们通常期望用户提供绝对路径，但也可以提供一个合理的默认值
+    default_input_root = '/media/HDD0/XCX/classes/images'
+    default_output_root = '/media/HDD0/XCX/classes/masks'
+
+    # --- 3. 设置 argparse ---
     parser = argparse.ArgumentParser("分布式Grounded-SAM自动目标提取脚本")
 
-    INPUT_ROOT = '/media/HDD0/XCX/classes/images'
-    outPUT_ROOT = '/media/HDD0/XCX/classes/masks'
-
     # --- 路径和目录 ---
-    parser.add_argument("--input_root", type=str, default=INPUT_ROOT, help="包含分类图像文件夹的根目录。")
-    parser.add_argument("--output_root", type=str, default=OUTPUT_ROOT, help="保存掩码和结果的根目录。")
-    parser.add_argument("--grounding_config", type=str,
-                        default="../GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
-                        help="GroundingDINO模型配置文件路径。")
-    parser.add_argument("--grounding_checkpoint", type=str, default="../groundingdino_swint_ogc.pth",
-                        help="GroundingDINO模型权重路径。")
-    parser.add_argument("--sam_checkpoint", type=str, default="../sam_vit_h_4b8939.pth", help="SAM模型权重路径。")
-    parser.add_argument("--bert_base_uncased_path", type=str, default="bert-base-uncased",
-                        help="BERT模型路径（如果需要本地加载）。")
+    parser.add_argument("--input_root", type=str, default=default_input_root, help="包含分类图像文件夹的根目录。")
+    parser.add_argument("--output_root", type=str, default=default_output_root, help="保存掩码和结果的根目录。")
+    parser.add_argument("--grounding_config", type=str, default=default_grounding_config, help="GroundingDINO模型配置文件路径。")
+    parser.add_argument("--grounding_checkpoint", type=str, default=default_grounding_checkpoint, help="GroundingDINO模型权重路径。")
+    parser.add_argument("--sam_checkpoint", type=str, default=default_sam_checkpoint, help="SAM模型权重路径。")
+    parser.add_argument("--bert_base_uncased_path", type=str, default="bert-base-uncased", help="BERT模型路径（如果需要本地加载）。")
 
     # --- 模型和处理参数 ---
-    parser.add_argument("--sam_version", type=str, default="vit_h", choices=['vit_h', 'vit_l', 'vit_b'],
-                        help="要使用的SAM模型版本。")
+    parser.add_argument("--sam_version", type=str, default="vit_h", choices=['vit_h', 'vit_l', 'vit_b'], help="要使用的SAM模型版本。")
     parser.add_argument("--box_threshold", type=float, default=0.3, help="GroundingDINO检测框置信度阈值。")
     parser.add_argument("--text_threshold", type=float, default=0.25, help="GroundingDINO文本关联置信度阈值。")
     parser.add_argument("--save_visualization", action='store_true', help="如果设置，将保存带有掩码和框的可视化图像。")
@@ -322,7 +331,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # 获取所有类别目录
+    # --- 4. 检查路径是否存在，提供更友好的错误信息 ---
+    # 这不是必须的，但可以极大提升用户体验
+    required_files = [args.grounding_config, args.grounding_checkpoint, args.sam_checkpoint]
+    for file_path in required_files:
+        if not os.path.exists(file_path):
+            print(f"错误：必需文件未找到: {file_path}")
+            print("请确保模型权重和配置文件已下载，并检查命令行参数或脚本中的默认路径是否正确。")
+            sys.exit(1)
+
+    # ... (后续的代码保持不变) ...
     try:
         categories = [d for d in os.listdir(args.input_root) if os.path.isdir(os.path.join(args.input_root, d))]
         if not categories:
@@ -340,12 +358,9 @@ if __name__ == "__main__":
     print(f"发现 {world_size} 个GPU。将为每个类别内的图像进行分布式处理。")
     print(f"待处理的类别: {categories}")
 
-    # 启动多进程
-    # 'spawn' 是在CUDA上使用多处理的推荐和最安全的方式
     mp.set_start_method('spawn', force=True)
     processes = []
     for rank in range(world_size):
-        # 注意：每个worker进程都接收完整的类别列表
         p = mp.Process(target=worker, args=(rank, world_size, args, categories))
         p.start()
         processes.append(p)
