@@ -12,21 +12,58 @@ from tqdm import tqdm
 import torch.multiprocessing as mp
 import torch.distributed as dist
 
-# 动态添加模型库路径
-# 建议在运行脚本的根目录下创建 GroundingDINO 和 segment_anything 文件夹
-sys.path.append(os.path.join(os.getcwd(), "GroundingDINO"))
-sys.path.append(os.path.join(os.getcwd(), "segment_anything"))
+# ==============================================================================
+# 动态路径设置 (最可靠的方法)
+# ==============================================================================
+try:
+    # 获取脚本文件所在的真实目录
+    script_dir = os.path.dirname(os.path.realpath(__file__))
 
-# 导入模型相关组件
+    # 假设项目根目录是脚本所在目录的上一级
+    project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
+
+    # 将项目根目录添加到 Python 的模块搜索路径中
+    if project_root not in sys.path:
+        sys.path.append(project_root)
+
+    print(f"项目根目录已添加至 sys.path: {project_root}")
+
+except NameError:
+    # 如果在交互式环境 (如 Jupyter) 中运行，__file__ 未定义
+    # 这种情况下，通常会将当前工作目录视为项目根目录
+    if os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
+    print(f"在交互式环境中运行，当前工作目录已添加至 sys.path: {os.getcwd()}")
+
+# ==============================================================================
+# 现在，导入模型相关组件
+# ==============================================================================
 try:
     import GroundingDINO.groundingdino.datasets.transforms as T
     from GroundingDINO.groundingdino.models import build_model
     from GroundingDINO.groundingdino.util.slconfig import SLConfig
     from GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
     from segment_anything import sam_model_registry, SamPredictor
+
+    print("成功导入 GroundingDINO 和 segment_anything 模块。")
+
 except ImportError as e:
-    print("错误：无法导入模型库。请确保 'GroundingDINO' 和 'segment_anything' 目录存在于当前工作目录中。")
-    print(f"详细错误: {e}")
+    print("\n" + "=" * 80)
+    print("错误：无法导入模型库。")
+    print("这通常意味着Python无法在sys.path中找到 'GroundingDINO' 或 'segment_anything' 目录。")
+    print("\n请检查您的项目目录结构是否如下所示:")
+    print("""
+    project_root/
+    ├── GroundingDINO/
+    ├── segment_anything/
+    └── scripts/
+        └── your_script.py  <-- 您的脚本在这里
+    """)
+    print(f"\n当前Python模块搜索路径 (sys.path):")
+    for p in sys.path:
+        print(f"- {p}")
+    print("\n" + "=" * 80)
+    print(f"\n详细导入错误: {e}")
     sys.exit(1)
 
 
