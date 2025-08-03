@@ -272,7 +272,7 @@ if __name__ == "__main__":
         for f in files
         if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))
     ]
-    max_threads = os.cpu_count()  # 默认使用CPU核心数作为最大线程数
+    max_threads = 100  # 默认使用CPU核心数作为最大线程数
 
     # --- 选择一个方案来运行 ---
 
