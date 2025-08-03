@@ -131,8 +131,8 @@ def batch_processor(video_list, output_dir, target_fps=23, max_workers=8):
 
 if __name__ == "__main__":
     # 配置参数
-    input_folder = "/media/HDD0/XCX/UVEB"
-    output_folder = "/media/HDD0/XCX/background0"
+    input_folder = "/media/HDD0/XCX/Selected-UVEB"
+    output_folder = "/media/HDD0/XCX/selected_backgrounds"
     target_fps = 15
     max_threads = 80  # 根据实际CPU核心数调整
 
