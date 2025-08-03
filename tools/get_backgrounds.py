@@ -134,7 +134,7 @@ if __name__ == "__main__":
     input_folder = "/media/HDD0/XCX/Selected-UVEB"
     output_folder = "/media/HDD0/XCX/selected_backgrounds"
     target_fps = 15
-    max_threads = 80  # 根据实际CPU核心数调整
+    max_threads = 50  # 根据实际CPU核心数调整
 
     # 扫描视频文件
     video_files = [
