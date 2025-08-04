@@ -282,6 +282,7 @@ if __name__ == "__main__":
     print("=" * 50)
     output_folder_all_frames = "/media/HDD0/XCX/selected_background"
     if video_files:
+        print(f"▶ 开始处理 {len(video_files)} 个视频")
         batch_processor_all_frames(video_files, output_folder_all_frames, max_threads)
     else:
         print("在输入目录中未找到视频文件。")
