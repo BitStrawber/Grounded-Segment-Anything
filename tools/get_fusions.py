@@ -10,7 +10,7 @@ from tqdm import tqdm
 # 配置参数
 class Config:
     # 输入路径
-    background_dir = "/media/HDD0/XCX/selected_background"  # 背景图像目录
+    background_dir = "/media/HDD0/XCX/selected_backgrounds"  # 背景图像目录
     object_root_dir = "/media/HDD0/XCX/classes/masks"  # 物体图像根目录
 
     # 输出路径
