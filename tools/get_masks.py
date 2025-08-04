@@ -332,14 +332,27 @@ def worker(rank, world_size, args, all_categories):
 
 
 if __name__ == "__main__":
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
+
+    # --- 2. 基于项目根目录构建默认路径 ---
+    # 这样做的好处是，无论你在哪里运行脚本，路径总是正确的
+    default_grounding_config = os.path.join(project_root,
+                                            "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+    default_grounding_checkpoint = os.path.join(project_root, "groundingdino_swint_ogc.pth")
+    default_sam_checkpoint = os.path.join(project_root, "sam_vit_h_4b8939.pth")
+    # 对于输入输出，我们通常期望用户提供绝对路径，但也可以提供一个合理的默认值
+    default_input_root = '/media/HDD0/XCX/classes/images'
+    default_output_root = '/media/HDD0/XCX/classes/masks'
+
     parser = argparse.ArgumentParser("优化后的分布式Grounded-SAM自动目标提取脚本")
 
     # --- 路径和目录 ---
-    parser.add_argument("--input_root", type=str, required=True, help="包含分类图像文件夹的根目录。")
-    parser.add_argument("--output_root", type=str, required=True, help="保存掩码和结果的根目录。")
-    parser.add_argument("--grounding_config", type=str, required=True, help="GroundingDINO模型配置文件路径。")
-    parser.add_argument("--grounding_checkpoint", type=str, required=True, help="GroundingDINO模型权重路径。")
-    parser.add_argument("--sam_checkpoint", type=str, required=True, help="SAM模型权重路径。")
+    parser.add_argument("--input_root", type=str, default=default_input_root, help="包含分类图像文件夹的根目录。")
+    parser.add_argument("--output_root", type=str, default=default_output_root, help="保存掩码和结果的根目录。")
+    parser.add_argument("--grounding_config", type=str, default=default_grounding_config, help="GroundingDINO模型配置文件路径。")
+    parser.add_argument("--grounding_checkpoint", type=str, default=default_grounding_checkpoint, help="GroundingDINO模型权重路径。")
+    parser.add_argument("--sam_checkpoint", type=str, default=default_sam_checkpoint, help="SAM模型权重路径。")
     parser.add_argument("--bert_base_uncased_path", type=str, default="bert-base-uncased",
                         help="BERT模型路径（如果需要本地加载）。")
 
