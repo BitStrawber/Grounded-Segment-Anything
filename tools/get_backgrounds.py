@@ -217,7 +217,7 @@ if __name__ == "__main__":
         if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))
     ]
     # 线程数可以根据您的硬件进行调整
-    max_threads = os.cpu_count() * 2 if os.cpu_count() else 8
+    max_threads = 100
 
     # --- 选择一个方案来运行 ---
     # 【注意】请只取消注释一个方案来运行，避免混淆输出
