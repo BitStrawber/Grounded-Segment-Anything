@@ -222,7 +222,7 @@ def generate_synthetic_images_mp():
     annotation_id_counter = 1
 
     # 步骤4: 创建并运行进程池
-    num_workers = os.cpu_count() or 4  # 自动获取CPU核心数作为进程数，如果失败则默认为4
+    num_workers = 100  # 自动获取CPU核心数作为进程数，如果失败则默认为4
     print(f"启动 {num_workers} 个进程进行并行处理...")
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
