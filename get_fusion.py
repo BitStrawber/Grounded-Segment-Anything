@@ -20,10 +20,10 @@ class Config:
     visualization_dir = os.path.join(output_root, "visualization")  # 可视化结果
 
     # 数据集参数
-    min_objects_per_image = 1  # 每张图像最少物体数
-    max_objects_per_image = 3  # 每张图像最多物体数
+    min_objects_per_image = 2  # 每张图像最少物体数
+    max_objects_per_image = 5  # 每张图像最多物体数
     min_instances_per_class = 1  # 每个类别最少实例数
-    max_instances_per_class = 3  # 每个类别最多实例数
+    max_instances_per_class = 5  # 每个类别最多实例数
     test_size = 0.3  # 测试集比例
     random_seed = 42  # 随机种子
     max_overlap_ratio = 0.3  # 最大允许遮挡比例

@@ -95,9 +95,9 @@ def split_coco_dataset(ann_file, output_dir, part1_ratio=0.2, test_ratio=0.25, s
 if __name__ == '__main__':
     # 使用示例
     split_coco_dataset(
-        ann_file='/home/xcx/桌面/fusions/annotations/instances_all.json',
-        output_dir='/home/xcx/桌面/fusions/annotations/split_results',
-        part1_ratio=0.2,
+        ann_file='/media/HDD0/XCX/fusions/annotations/instances_all.json',
+        output_dir='/media/HDD0/XCX/fusions/annotations/annotations/split_results',
+        part1_ratio=0.3,
         test_ratio=0.25,
         seed=42
     )

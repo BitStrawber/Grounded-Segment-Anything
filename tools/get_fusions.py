@@ -109,10 +109,10 @@ def load_object_data(object_root_dir):
         images_dir = os.path.join(object_root_dir, class_name, "image")
         masks_dir = os.path.join(object_root_dir, class_name, "mask")
         if not (os.path.exists(images_dir) and os.path.exists(masks_dir)): continue
-        obj_files = [f for f in os.listdir(images_dir) if f.endswith(('.png', '.jpg', '.jpeg')) and "_obj_" in f]
+        obj_files = [f for f in os.listdir(images_dir) if f.endswith(('.png', '.jpg', '.jpeg')) and "_obj" in f]
         object_data[class_name] = []
         for obj_file in obj_files:
-            mask_file = obj_file.replace("_obj_", "_mask_")
+            mask_file = obj_file.replace("_obj", "_mask")
             obj_path, mask_path = os.path.join(images_dir, obj_file), os.path.join(masks_dir, mask_file)
             if os.path.exists(mask_path): object_data[class_name].append((obj_path, mask_path))
     return object_data
@@ -222,7 +222,7 @@ def generate_synthetic_images_mp():
     annotation_id_counter = 1
 
     # 步骤4: 创建并运行进程池
-    num_workers = 100  # 自动获取CPU核心数作为进程数，如果失败则默认为4
+    num_workers = 80  # 自动获取CPU核心数作为进程数，如果失败则默认为4
     print(f"启动 {num_workers} 个进程进行并行处理...")
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:

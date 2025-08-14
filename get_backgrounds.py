@@ -60,7 +60,7 @@ if __name__ == "__main__":
     input1_folder = "/media/HDD0/XCX/UVEB/test"  # 包含子文件夹的视频目录
     input2_folder = "/media/HDD0/XCX/UVEB/train/blur"  # 包含子文件夹的视频目录
     output_folder = "/media/HDD0/XCX/backgrounds"  # 所有帧直接输出到这里
-    frames_per_second = 1.0  # 每秒抽帧数
+    frames_per_second = 15.0  # 每秒抽帧数
 
     # 执行处理
     batch_process(input1_folder, output_folder, frames_per_second)

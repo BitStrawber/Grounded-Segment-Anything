@@ -202,7 +202,7 @@ class CategorizedSegmenter:
             vis_image = image_cv.copy()
             # 绘制半透明蒙版
             color = np.array([0, 255, 0], dtype=np.uint8)  # 绿色
-            vis_image[mask_np > 0] = cv2.addWeighted(vis_image[mask_np > 0], 0.5, color, 0.5, 0)
+            vis_image[mask_np > 0] = vis_image[mask_np > 0]*0.5 + color*0.5
 
             # 绘制边界框
             box = box_tensor.numpy().astype(int)
