@@ -132,13 +132,13 @@ if __name__ == '__main__':
     # ----- 在这里配置您的文件路径 -----
 
     # 示例1: 处理训练集
-    input_train_path = '/media/HDD0/XCX/fusions/annotations/split_results/part2_train.json'
-    output_train_path = '/media/HDD0/XCX/fusions/annotations/split_results/part2_train_merged.json'
+    input_train_path = '/media/HDD0/XCX/fusions/annotations/annotations/split_results/part2_train.json'
+    output_train_path = '/media/HDD0/XCX/fusions/annotations/annotations/split_results/part2_train_merged.json'
     merge_coco_categories(input_train_path, output_train_path)
 
     # 示例2: 处理验证集
-    input_val_path = '/media/HDD0/XCX/fusions/annotations/split_results/part2_val.json'
-    output_val_path = '/media/HDD0/XCX/fusions/annotations/split_results/part2_val_merged.json'
+    input_val_path = '/media/HDD0/XCX/fusions/annotations/annotations/split_results/part2_val.json'
+    output_val_path = '/media/HDD0/XCX/fusions/annotations/annotations/split_results/part2_val_merged.json'
     merge_coco_categories(input_val_path, output_val_path)
 
     # 如果还有测试集，可以按相同方式添加
